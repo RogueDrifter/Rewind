@@ -1,6 +1,11 @@
 // Rewind include by RogueDrifter 2018/12/24 
 #include <a_samp>
 
+#if defined r_RewindTime_included_
+	#endinput
+#endif
+
+#define r_RewindTime_included_
 #define PLAYER_SEAT_DRIVER 0
 #define PLAYER_SEAT_FRONT_PASSENGER 1
 #define MAX_REWIND_TDRAW 12
