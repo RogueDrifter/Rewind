@@ -22,9 +22,9 @@ Include in your code and begin using the library (Only in one script):
 
 Callbacks:
 ```C
-public OnPlayerRewindForPlayer(playerid, forplayerid)
-public OnPlayerStartRewind(playerid)
-public OnPlayerFinishRewind(playerid)
+public OnPlayerRewindForPlayer(playerid, forplayerid);
+public OnPlayerStartRewind(playerid);
+public OnPlayerFinishRewind(playerid);
 ```
 
 Functions:
