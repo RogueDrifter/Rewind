@@ -29,13 +29,13 @@ public OnPlayerFinishRewind(playerid)
 
 Functions:
 ```C
-stock ShowTimeMachineSynced(playerid)
-stock HideTimeMachineSynced(playerid)
+ShowTimeMachineSynced(playerid);
+HideTimeMachineSynced(playerid);
 
-stock StartRewinding(playerid)
+StartRewinding(playerid);
 
-bool:IsPlayerInvolvedInRewind(playerid)
-bool:IsPlayerRewinding(playerid)
+bool:IsPlayerInvolvedInRewind(playerid);
+bool:IsPlayerRewinding(playerid);
 ```
 
 ## Testing
