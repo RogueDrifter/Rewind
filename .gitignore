@@ -1,52 +1,50 @@
-# Prerequisites
-*.d
+#
+# Package only files
+#
 
-# Object files
-*.o
-*.ko
-*.obj
-*.elf
+# Compiled Bytecode, precompiled output and assembly
+*.amx
+*.lst
+*.asm
 
-# Linker output
-*.ilk
-*.map
-*.exp
+# Vendor directory for dependencies
+dependencies/
 
-# Precompiled Headers
-*.gch
-*.pch
+# Dependency versions lockfile
+pawn.lock
 
-# Libraries
-*.lib
-*.a
-*.la
-*.lo
 
-# Shared objects (inc. Windows DLLs)
+#
+# Server/gamemode related files
+#
+
+# compiled settings file
+# keep `samp.json` file on version control
+# but make sure the `rcon_password` field is set externally
+# you can use the environment variable `SAMP_RCON_PASSWORD` to do this.
+server.cfg
+
+# Plugins directory
+plugins/
+
+# binaries
+*.exe
 *.dll
 *.so
-*.so.*
-*.dylib
+announce
+samp03svr
+samp-npc
 
-# Executables
-*.exe
-*.out
-*.app
-*.i*86
-*.x86_64
-*.hex
+# logs
+logs/
+server_log.txt
+crashinfo.txt
 
-# Debug files
-*.dSYM/
-*.su
-*.idb
-*.pdb
+# Ban list
+samp.ban
 
-# Kernel Module Compile Results
-*.mod*
-*.cmd
-.tmp_versions/
-modules.order
-Module.symvers
-Mkfile.old
-dkms.conf
+#
+# Common files
+#
+
+*.sublime-workspace
