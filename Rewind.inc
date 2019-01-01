@@ -494,7 +494,7 @@ public OnPlayerUpdate(playerid)
 public OnPlayerDisconnect(playerid, reason)
 {
 	ResetTimeMachine(playerid);
-	KillTimer(Rewind_Player[playerid][RewindSync]);
+
 	KillTimer(Rewind_Player[playerid][HandOfTime]);
 	Delete3DTextLabel(Rewind_Player[playerid][RewindLabel]);
 	Rewind_Player[playerid][RewindLabel] = Text3D:INVALID_3DTEXT_ID;
@@ -724,7 +724,8 @@ static FinishRewind(playerid)
 	Rewind_Player[playerid][BRewind] = false;
 	Rewind_Player[playerid][PRewind] = false;
 	Rewind_Player[playerid][ResyncOn] = false;
-
+	KillTimer(Rewind_Player[playerid][RewindSync]);
+	
 	TogglePlayerControllable(playerid, 1);
 	SetCameraBehindPlayer(playerid);
 	StopAudioStreamForPlayer(playerid);
@@ -742,7 +743,8 @@ static ResetTimeMachine(playerid)
 	Rewind_Player[playerid][BRewind] = false;
 	Rewind_Player[playerid][PRewind] = false;
 	Rewind_Player[playerid][ResyncOn] = false;
-
+	KillTimer(Rewind_Player[playerid][RewindSync]);
+	
 	for(new x; x < 4 + 1; x++)
 	{
 		Rewind_Player[playerid][RPosX][x] = 0.0;
