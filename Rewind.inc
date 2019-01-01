@@ -9,6 +9,7 @@
 #define PLAYER_SEAT_DRIVER 0
 #define PLAYER_SEAT_FRONT_PASSENGER 1
 #define MAX_REWIND_TDRAW 12
+#define REWIND_PLAYERS_HARMONY 2 //In minutes
 
 enum PLAYER_REWIND_DATA
 {
@@ -107,7 +108,7 @@ forward StartSyncingDots(playerid);
 
 	public OnGameModeInit()
 	{
-		Rewind_World[WorldTimeHarmony] = SetTimer("SyncTimeMachine", 3*60*1000, true);
+		Rewind_World[WorldTimeHarmony] = SetTimer("SyncTimeMachine", REWIND_PLAYERS_HARMONY*60*1000, true);
 
 		Rewind_TD[0] = TextDrawCreate(601.350158, 362.666931, "Bottom");//Bar 1
 		TextDrawLetterSize(Rewind_TD[0], 0.505598, 1.614933);
@@ -284,7 +285,7 @@ forward StartSyncingDots(playerid);
 #else
 	public OnFilterScriptInit()
 	{
-		Rewind_World[WorldTimeHarmony] = SetTimer("SyncTimeMachine", 3*60*1000, true);
+		Rewind_World[WorldTimeHarmony] = SetTimer("SyncTimeMachine", REWIND_PLAYERS_HARMONY*60*1000, true);
 
 		Rewind_TD[0] = TextDrawCreate(601.350158, 362.666931, "Bottom");//Bar 1
 		TextDrawLetterSize(Rewind_TD[0], 0.505598, 1.614933);
