@@ -23,7 +23,6 @@ enum PLAYER_REWIND_DATA
 
 	RewindVehicle[4],
 	RewindPhases,
-	RewindTicks,
 
 	bool:ResyncOn,
 	bool:RewindReroll,
@@ -83,10 +82,6 @@ static
 		forward RTC_OnGameModeInit();
 	#endif
 
-#endif
-
-#if defined RTC_OnPlayerUpdate
-	forward RTC_OnPlayerUpdate(playerid);
 #endif
 
 #if defined RTC_OnPlayerDisconnect
@@ -482,15 +477,6 @@ public OnPlayerConnect(playerid)
 	#endif
 }
 
-public OnPlayerUpdate(playerid)
-{
-	Rewind_Player[playerid][RewindTicks] = GetTickCount();
-	#if defined RTC_OnPlayerUpdate
-		return RTC_OnPlayerUpdate(playerid);
-	#else
-		return 1;
-	#endif
-}
 public OnPlayerDisconnect(playerid, reason)
 {
 	ResetTimeMachine(playerid);
@@ -738,7 +724,6 @@ static ResetTimeMachine(playerid)
 	Rewind_Player[playerid][RewindHP] = 0.0;
 	Rewind_Player[playerid][RewindArmour] = 0.0;
 	Rewind_Player[playerid][RewindPhases] = 0;
-	Rewind_Player[playerid][RewindTicks] = 0;
 	Rewind_Player[playerid][RewindReroll] = false;
 	Rewind_Player[playerid][BRewind] = false;
 	Rewind_Player[playerid][PRewind] = false;
@@ -923,7 +908,6 @@ public StartSavingRewindData(playerid)
 	 	PlayerCurrentState = GetPlayerState(playerid);
 
 	if(Rewind_Player[playerid][PRewind] || Rewind_Player[playerid][BRewind]) return 0;
-	if(GetTickCount() > (Rewind_Player[playerid][RewindTicks]+6000)) return 0;
 	if(PlayerCurrentState == PLAYER_STATE_NONE || PlayerCurrentState == PLAYER_STATE_WASTED 
 	|| PlayerCurrentState == PLAYER_STATE_SPECTATING || PlayerCurrentState == PLAYER_STATE_EXIT_VEHICLE
 	|| PlayerCurrentState == PLAYER_STATE_ENTER_VEHICLE_DRIVER 
@@ -1044,14 +1028,6 @@ public StartSavingRewindData(playerid)
 #endif
 
 #define OnPlayerStateChange RTC_OnPlayerStateChange
-
-#if defined _ALS_OnPlayerUpdate
-  #undef OnPlayerUpdate
-#else
-	#define _ALS_OnPlayerUpdate
-#endif
-
-#define OnPlayerUpdate RTC_OnPlayerUpdate
 
 #if defined FILTERSCRIPT
 
