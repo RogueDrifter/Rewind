@@ -38,6 +38,11 @@ bool:IsPlayerInvolvedInRewind(playerid);
 bool:IsPlayerRewinding(playerid);
 ```
 
+More add-ons:
+```C
+#define REWIND_MAXIMUM_PHASES 5 //Can b changed just put the line with your number before the include.
+```
+
 ## Testing
 To test, simply run the package:
 
@@ -52,4 +57,4 @@ sampctl package run
 
 3- 3D Text labels to mark for other players your ability to rewind.
 ```
-Currently supports vehicle interactions (not full) and on-foot interactions (not full either) but goes back up to 4 takes with an audio stream and a flashing extra textdraw.
+Currently supports vehicle interactions (not full) and on-foot interactions (not full either) but goes back up to 29 takes with an audio stream and a flashing extra textdraw.
