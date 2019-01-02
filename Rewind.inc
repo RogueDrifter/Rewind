@@ -2,7 +2,7 @@
 
 #if defined REWIND_MAXIMUM_PHASES
 	#if REWIND_MAXIMUM_PHASES > 29 || REWIND_MAXIMUM_PHASES < 5
-		#error Make sure this value is between 5 and 30 (or equal to either)
+		#error Make sure this value is between 5 and 29 (or equal to either)
 	#endif
 #endif
 
