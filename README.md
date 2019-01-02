@@ -40,7 +40,7 @@ bool:IsPlayerRewinding(playerid);
 
 More add-ons:
 ```C
-#define REWIND_MAXIMUM_PHASES 5 //Can b changed just put the line with your number before the include.
+#define REWIND_MAXIMUM_PHASES 5 //Can be changed just put the line with your number before the include.
 ```
 
 ## Testing
