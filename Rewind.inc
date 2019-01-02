@@ -1,11 +1,9 @@
 // Rewind include by RogueDrifter 2018/12/24 -767758715
 
 #if defined REWIND_MAXIMUM_PHASES
-
 	#if REWIND_MAXIMUM_PHASES > 29 || REWIND_MAXIMUM_PHASES < 5
 		#error Make sure this value is between 5 and 30 (or equal to either)
 	#endif
-
 #endif
 
 #include <a_samp>
@@ -800,6 +798,33 @@ public RerollTape(playerid)
 	TextDrawShowForPlayer(playerid, Rewind_TD[13]);
 	SetTimerEx("HideThisEffect", 100, false, "ii", playerid, 0);
 
+	switch(Rewind_Player[playerid][RewindPhases])
+	{
+		case 23:
+		{
+			StopAudioStreamForPlayer(playerid);
+			PlayAudioStreamForPlayer(playerid, "https://s0.vocaroo.com/media/download_temp/Vocaroo_s02Q30FyGOWp.mp3");
+		}
+
+		case 16:
+		{
+			StopAudioStreamForPlayer(playerid);
+			PlayAudioStreamForPlayer(playerid, "https://s0.vocaroo.com/media/download_temp/Vocaroo_s02Q30FyGOWp.mp3");
+		}
+
+		case 9:
+		{
+			StopAudioStreamForPlayer(playerid);
+			PlayAudioStreamForPlayer(playerid, "https://s0.vocaroo.com/media/download_temp/Vocaroo_s02Q30FyGOWp.mp3");
+		}
+
+		case 3:
+		{
+			StopAudioStreamForPlayer(playerid);
+			PlayAudioStreamForPlayer(playerid, "https://s0.vocaroo.com/media/download_temp/Vocaroo_s02Q30FyGOWp.mp3");				
+		}
+	}
+	
 	switch(Rewind_Player[playerid][RewindPhases])
 	{
 		case 0:
