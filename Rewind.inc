@@ -17,6 +17,8 @@
 #define PLAYER_SEAT_FRONT_PASSENGER 1
 #define MAX_REWIND_TDRAW 12
 #define REWIND_PLAYERS_HARMONY 2
+#define SYNCEED_REWIND_BUFFER 85
+#define REWIND_CHOOSING_DIALOG 32766
 
 #if !defined REWIND_MAXIMUM_PHASES
 	#define REWIND_MAXIMUM_PHASES 5
@@ -24,27 +26,45 @@
 
 enum PLAYER_REWIND_DATA
 {
+	Float:RSPosX[SYNCEED_REWIND_BUFFER + 1],
+	Float:RSPosY[SYNCEED_REWIND_BUFFER + 1],
+	Float:RSPosZ[SYNCEED_REWIND_BUFFER + 1],
 	Float:RPosX[REWIND_MAXIMUM_PHASES + 1],
 	Float:RPosY[REWIND_MAXIMUM_PHASES + 1],
 	Float:RPosZ[REWIND_MAXIMUM_PHASES + 1],
 	Float:RPosAngle[REWIND_MAXIMUM_PHASES + 1],
+	Float:RSPosAngle[SYNCEED_REWIND_BUFFER + 1],
 
 	Float:RewindHP,
 	Float:RewindArmour,
 
+	RSOldState[SYNCEED_REWIND_BUFFER + 1],
 	ROldState[REWIND_MAXIMUM_PHASES + 1],
 	RPInterior[REWIND_MAXIMUM_PHASES + 1],
 	RPVWorld[REWIND_MAXIMUM_PHASES + 1],
+	RSPInterior[SYNCEED_REWIND_BUFFER + 1],
+	RSPVWorld[SYNCEED_REWIND_BUFFER + 1],
 
+	RewindSVehicle[SYNCEED_REWIND_BUFFER + 1],
 	RewindVehicle[REWIND_MAXIMUM_PHASES + 1],
 	RewindPhases,
+	SyncedRewindFlags,
 
 	bool:ResyncOn,
 	bool:BRewind,
 	bool:PRewind,
+	bool:SyncedRewindOn,
+	bool:SyncedRewindDouble,
+	bool:PrewindWorld,
+
+	bool:PRewindFlash,
+	bool:PRewindCamera,
+	bool:PRewindAuto,
 
 	Text3D:RewindLabel,
 
+	SyncedRerollTimer,
+	SyncedRewindTimer,
 	DotsSync,
 	RewindSync,
 	HandOfTime
@@ -52,7 +72,12 @@ enum PLAYER_REWIND_DATA
 
 enum WORLD_REWIND_DATA
 {
-	WorldTimeHarmony
+	WorldTimeHarmony,
+
+	bool:RewindCamera,
+	bool:RewindFlash,
+	bool:RewindAuto,
+	bool:WorldRewind
 }
 
 static 
@@ -73,8 +98,20 @@ static
 	forward OnPlayerFinishRewind(playerid);
 #endif
 
+#if defined OnPlayerFastRewind
+	forward OnPlayerFastRewind(playerid);
+#endif
+
+#if defined OnPlayerFinishFastRewind
+	forward OnPlayerFinishFastRewind(playerid);
+#endif
+
 #if defined RTC_OnPlayerConnect
 	forward RTC_OnPlayerConnect(playerid);
+#endif
+
+#if defined RTC_OnDialogResponse
+	forward RTC_OnDialogResponse(playerid, dialogid, response, listitem, inputtext[]);
 #endif
 
 #if defined FILTERSCRIPT
@@ -103,20 +140,18 @@ static
 	forward RTC_OnPlayerDisconnect(playerid, reason);
 #endif
 
-#if defined RTC_OnPlayerStateChange
-	forward RTC_OnPlayerStateChange(playerid, newstate, oldstate);
-#endif
-
 forward OnPlayerStartRewindEx(playerid);
 forward OnPlayerFinishRewindEx(playerid);
 forward OnPlayerRewindForPlayerEx(playerid, forplayerid);
 forward SyncTimeMachine();
-forward HideThisEffect(playerid, EffectType);
+forward HideThisEffect(playerid);
 forward SetPlayersCamBehind(playerid);
 forward RerollTape(playerid);
 forward SyncMachinePower(playerid);
 forward StartSavingRewindData(playerid);
 forward StartSyncingDots(playerid);
+forward SyncedRewindProcess(playerid);
+forward StartRerollingTapeSynced(playerid, RewindFlag);
 
 #if !defined FILTERSCRIPT
 	public OnGameModeInit()
@@ -371,7 +406,9 @@ public OnPlayerConnect(playerid)
 public OnPlayerDisconnect(playerid, reason)
 {
 	ResetTimeMachine(playerid);
+	SyncedRewindResetTools(playerid);
 
+	TextDrawHideForPlayer(playerid, Rewind_TD[13]);
 	KillTimer(Rewind_Player[playerid][HandOfTime]);
 	Delete3DTextLabel(Rewind_Player[playerid][RewindLabel]);
 	Rewind_Player[playerid][RewindLabel] = Text3D:INVALID_3DTEXT_ID;
@@ -383,17 +420,37 @@ public OnPlayerDisconnect(playerid, reason)
 	#endif
 }
 
-public OnPlayerStateChange(playerid, newstate, oldstate)
+public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
 {
-	if(!Rewind_Player[playerid][PRewind] && !Rewind_Player[playerid][BRewind])
+	if(dialogid == REWIND_CHOOSING_DIALOG)
 	{
-		Rewind_Player[playerid][ROldState][ Rewind_Player[playerid][RewindPhases] ] = oldstate;
+		switch(response)
+		{
+			case true:
+			{
+				if(Rewind_Player[playerid][SyncedRewindFlags] == SYNCEED_REWIND_BUFFER) Rewind_Player[playerid][SyncedRewindFlags] --;
+				StopAudioStreamForPlayer(playerid);
+				PlayAudioStreamForPlayer(playerid, "https://s0.vocaroo.com/media/download_temp/Vocaroo_s02Q30FyGOWp.mp3");
+				RewindPlayerFullySynced(playerid);
+				Rewind_Player[playerid][SyncedRewindOn] = true;
+
+				#if defined OnPlayerFastRewind
+					OnPlayerFastRewind(playerid);
+				#endif
+			}
+
+			case false:
+			{
+				TogglePlayerControllable(playerid, 1);
+				SyncedRewindResetTools(playerid);
+			}
+		}
 	}
 
-	#if defined RTC_OnPlayerStateChange
-		return RTC_OnPlayerStateChange(playerid, newstate, oldstate);
+	#if defined RTC_OnDialogResponse
+		return RTC_OnDialogResponse(playerid, dialogid, response, listitem, inputtext[]);
 	#else
-		return 1;
+		return 0;
 	#endif
 }
 
@@ -402,6 +459,7 @@ static stock RewindPlayerForPlayer(playerid, forplayerid)
 	if(Rewind_Player[playerid][ResyncOn]) HideTimeMachineSynced(playerid);
 	PlayAudioStreamForPlayer(playerid, "https://s0.vocaroo.com/media/download_temp/Vocaroo_s02Q30FyGOWp.mp3");
 	RerollTape(playerid);
+
 	return OnPlayerRewindForPlayerEx(playerid, forplayerid);
 }
 
@@ -410,7 +468,7 @@ static stock RewindWorld(playerid)
 	#if !defined foreach 
 		for(new i, j = GetPlayerPoolSize(); i <= j; i++)
 		{
-			if(!IsPlayerConnected(i) || i == playerid || Rewind_Player[i][PRewind] || Rewind_Player[i][BRewind]) continue;
+			if(!IsPlayerConnected(i) || i == playerid || Rewind_Player[i][PRewind] || Rewind_Player[i][BRewind] || Rewind_Player[i][SyncedRewindOn]) continue;
 			if(Rewind_Player[i][RewindPhases] == 0) continue;
 			if(IsPlayerStreamedIn(i, playerid))
 			{
@@ -422,7 +480,7 @@ static stock RewindWorld(playerid)
 	#else
 		foreach(new i: Player)
 		{
-			if(!IsPlayerConnected(i) || i == playerid || Rewind_Player[i][PRewind] || Rewind_Player[i][BRewind]) continue;
+			if(!IsPlayerConnected(i) || i == playerid || Rewind_Player[i][PRewind] || Rewind_Player[i][BRewind] || Rewind_Player[i][SyncedRewindOn]) continue;
 			if(Rewind_Player[i][RewindPhases] == 0) continue;
 			if(IsPlayerStreamedIn(i, playerid))
 			{
@@ -432,7 +490,33 @@ static stock RewindWorld(playerid)
 			}
 		}
 	#endif
+
 	return 1;
+}
+
+static stock RewindMakePlayerChoose(playerid)
+{
+	TogglePlayerControllable(playerid, 0);
+	PlayAudioStreamForPlayer(playerid, "https://vocaroo.com/media_command.php?media=s0iFx9S5qoFf&command=download_mp3");
+	ShowPlayerDialog(playerid, REWIND_CHOOSING_DIALOG, DIALOG_STYLE_MSGBOX, "{FFFFFF}Time machine", "{FFFFFF}Play this rewind?", "{00FF00}Yes", "{FF0000}No");
+	return 1;
+}
+
+static stock SyncedRewindResetTools(playerid)
+{
+	StopAudioStreamForPlayer(playerid);
+	TogglePlayerControllable(playerid, 1);
+	Rewind_Player[playerid][SyncedRewindOn] = false;
+	Rewind_Player[playerid][SyncedRewindDouble] = false;
+	Rewind_Player[playerid][SyncedRewindFlags] = 0;
+	KillTimer(Rewind_Player[playerid][SyncedRewindTimer]);
+	KillTimer(Rewind_Player[playerid][SyncedRerollTimer]);
+	return 1;
+}
+
+static stock RewindPlayerFullySynced(playerid)
+{
+	return Rewind_Player[playerid][SyncedRerollTimer] = SetTimerEx("StartRerollingTapeSynced", 100, true, "i", playerid, Rewind_Player[playerid][SyncedRewindFlags]); 
 }
 
 static stock ShowPlayerRewindScene(playerid)
@@ -498,10 +582,62 @@ stock bool:IsPlayerRewinding(playerid)
 
 stock bool:IsPlayerInvolvedInRewind(playerid) 
 	return Rewind_Player[playerid][BRewind];
-	
+stock bool:IsPlayerFastRewinding(playerid)
+	return Rewind_Player[playerid][SyncedRewindOn];
+
+stock ToggleRewindFlash(bool:toggle)
+{
+	return Rewind_World[RewindFlash] = toggle;
+}
+
+stock ToggleRewindFlashForPlayer(playerid, bool:toggle)
+{
+	return Rewind_Player[playerid][PRewindFlash] = toggle;
+}
+
+stock ToggleCameraMovements(bool:toggle)
+{
+	return Rewind_World[RewindCamera] = toggle;
+}
+
+stock ToggleCameraMovementsForPlayer(playerid, bool:toggle)
+{
+	return Rewind_Player[playerid][PRewindCamera] = toggle;
+}
+
+stock ToggleRewindAuto(bool:toggle)
+{
+	return Rewind_World[RewindAuto] = toggle;
+}
+
+stock ToggleRewindAutoForPlayer(playerid, bool:toggle)
+{
+	return Rewind_Player[playerid][PRewindAuto] = toggle;
+}
+
+stock ToggleWorldRewind(bool:toggle)
+{
+	return Rewind_World[RewindWorld] = toggle;
+}
+
+stock ToggleWorldRewindForPlayer(playerid, bool:toggle)
+{
+	return Rewind_Player[playerid][PrewindWorld] = toggle;
+}
+
+stock StartRecordingRewindSynced(playerid)
+{
+	if(Rewind_Player[playerid][PRewind] || Rewind_Player[playerid][BRewind] || Rewind_Player[playerid][SyncedRewindDouble]) return 0;
+	Rewind_Player[playerid][SyncedRewindDouble] = true;
+
+	SaveRewindFlag(playerid);
+	Rewind_Player[playerid][SyncedRewindTimer] = SetTimerEx("SyncedRewindProcess", 100, true, "i", playerid);
+	return 1;
+}
+
 stock StartRewinding(playerid)
 {
-	if(Rewind_Player[playerid][PRewind] || Rewind_Player[playerid][BRewind]) return 0;
+	if(Rewind_Player[playerid][PRewind] || Rewind_Player[playerid][BRewind] || Rewind_Player[playerid][SyncedRewindOn]) return 0;
 	if(Rewind_Player[playerid][RewindPhases] < 1) return 0;
 	Rewind_Player[playerid][PRewind] = true;
 	if(Rewind_Player[playerid][ResyncOn]) HideTimeMachineSynced(playerid);
@@ -511,7 +647,7 @@ stock StartRewinding(playerid)
 	ShowPlayerRewindScene(playerid);
 	PlayAudioStreamForPlayer(playerid, "https://s0.vocaroo.com/media/download_temp/Vocaroo_s02Q30FyGOWp.mp3");
 	TogglePlayerControllable(playerid, 0);
-	RewindWorld(playerid);
+	if(!Rewind_World[RewindWorld] && !Rewind_Player[playerid][PrewindWorld]) RewindWorld(playerid);
 	RerollTape(playerid);
 	return OnPlayerStartRewindEx(playerid);	
 }
@@ -584,6 +720,47 @@ stock HideTimeMachineSynced(playerid)
 	return HideForPlayerRewindScene(playerid);
 }
 
+static RewindOldEqualsNew(playerid, CurrentFlagCount)
+{
+	if(CurrentFlagCount == -1) return 0;
+
+	new Float:Rewind_X, Float:Rewind_Y, Float:Rewind_Z;
+	GetPlayerPos(playerid, Rewind_X, Rewind_Y, Rewind_Z);
+
+	if(Rewind_Player[playerid][RSPosX][CurrentFlagCount] == Rewind_X && Rewind_Player[playerid][RSPosY][CurrentFlagCount] == Rewind_Y &&
+	Rewind_Player[playerid][RSPosZ][CurrentFlagCount] == Rewind_Z)
+	{
+		return 1;
+	}
+	
+	return 0;
+}
+
+static SaveRewindFlag(playerid)
+{
+	new PlayerRewindVeh = GetPlayerVehicleID(playerid);
+	new PlayerRewindState = GetPlayerState(playerid);
+	Rewind_Player[playerid][RSPInterior][ Rewind_Player[playerid][SyncedRewindFlags] ] = GetPlayerInterior(playerid);
+	Rewind_Player[playerid][RSPVWorld][ Rewind_Player[playerid][SyncedRewindFlags] ]   = GetPlayerVirtualWorld(playerid);
+	switch(PlayerRewindState)
+	{
+		case PLAYER_STATE_DRIVER, PLAYER_STATE_PASSENGER:
+		{
+			GetVehiclePos(PlayerRewindVeh, Rewind_Player[playerid][RSPosX][ Rewind_Player[playerid][SyncedRewindFlags] ], Rewind_Player[playerid][RSPosY][ Rewind_Player[playerid][SyncedRewindFlags] ]
+				, Rewind_Player[playerid][RSPosZ][ Rewind_Player[playerid][SyncedRewindFlags] ]), Rewind_Player[playerid][RewindSVehicle][ Rewind_Player[playerid][SyncedRewindFlags] ] = PlayerRewindVeh;
+			GetVehicleZAngle(PlayerRewindVeh, Rewind_Player[playerid][RSPosAngle][ Rewind_Player[playerid][SyncedRewindFlags] ]);
+		}
+
+		case PLAYER_STATE_ONFOOT:
+		{
+			GetPlayerPos(playerid, Rewind_Player[playerid][RSPosX][ Rewind_Player[playerid][SyncedRewindFlags] ], Rewind_Player[playerid][RSPosY][ Rewind_Player[playerid][SyncedRewindFlags] ]
+		, 		Rewind_Player[playerid][RSPosZ][ Rewind_Player[playerid][SyncedRewindFlags] ]);
+			GetPlayerFacingAngle(playerid, Rewind_Player[playerid][RSPosAngle][ Rewind_Player[playerid][SyncedRewindFlags] ]);
+		}
+	}
+	return Rewind_Player[playerid][RSOldState][ Rewind_Player[playerid][SyncedRewindFlags] ] = PlayerRewindState;
+}
+
 static HideForPlayerRewindScene(playerid)
 {
 	for(new x; x < MAX_REWIND_TDRAW + 1; x++)
@@ -633,11 +810,57 @@ static GetBarDots(playerid)
 	return Rewind_Dots;
 }
 
+static SetPlayeRSPosByPhaseSynced(playerid)
+{
+	new PlayerTempState = GetPlayerState(playerid);
+	if(Rewind_Player[playerid][RSOldState][ Rewind_Player[playerid][SyncedRewindFlags] ] == -1 || Rewind_Player[playerid][RSOldState][ Rewind_Player[playerid][SyncedRewindFlags] ] == 0) Rewind_Player[playerid][RSOldState][ Rewind_Player[playerid][SyncedRewindFlags] ] = PlayerTempState;
+
+	if( (PlayerTempState == PLAYER_STATE_ONFOOT && Rewind_Player[playerid][RSOldState][ Rewind_Player[playerid][SyncedRewindFlags] ]  == PLAYER_STATE_DRIVER) ||
+	(PlayerTempState == PLAYER_STATE_PASSENGER && Rewind_Player[playerid][RSOldState][ Rewind_Player[playerid][SyncedRewindFlags] ]  == PLAYER_STATE_DRIVER) )
+	{
+		PutPlayerInVehicle(playerid, Rewind_Player[playerid][RewindSVehicle][ Rewind_Player[playerid][SyncedRewindFlags] ] , PLAYER_SEAT_DRIVER);
+		SetVehiclePos(Rewind_Player[playerid][RewindSVehicle][ Rewind_Player[playerid][SyncedRewindFlags] ] , Rewind_Player[playerid][RSPosX][ Rewind_Player[playerid][SyncedRewindFlags] ] , Rewind_Player[playerid][RSPosY][ Rewind_Player[playerid][SyncedRewindFlags] ] , Rewind_Player[playerid][RSPosZ][ Rewind_Player[playerid][SyncedRewindFlags] ] );
+		SetVehicleZAngle(Rewind_Player[playerid][RewindSVehicle][ Rewind_Player[playerid][SyncedRewindFlags] ], Rewind_Player[playerid][RSPosAngle][ Rewind_Player[playerid][SyncedRewindFlags] ]);
+		SetVehicleVirtualWorld(Rewind_Player[playerid][RewindSVehicle][ Rewind_Player[playerid][SyncedRewindFlags] ], Rewind_Player[playerid][RSPVWorld][ Rewind_Player[playerid][SyncedRewindFlags] ]);
+		LinkVehicleToInterior(Rewind_Player[playerid][RewindSVehicle][ Rewind_Player[playerid][SyncedRewindFlags] ], Rewind_Player[playerid][RSPInterior][ Rewind_Player[playerid][SyncedRewindFlags] ]);
+	}
+	else if( (PlayerTempState == PLAYER_STATE_ONFOOT && Rewind_Player[playerid][RSOldState][ Rewind_Player[playerid][SyncedRewindFlags] ]  == PLAYER_STATE_PASSENGER) ||
+	(PlayerTempState == PLAYER_STATE_DRIVER && Rewind_Player[playerid][RSOldState][ Rewind_Player[playerid][SyncedRewindFlags] ]  == PLAYER_STATE_PASSENGER) )
+	{	
+		PutPlayerInVehicle(playerid, Rewind_Player[playerid][RewindSVehicle][ Rewind_Player[playerid][SyncedRewindFlags] ] , PLAYER_SEAT_FRONT_PASSENGER);
+		SetVehiclePos(Rewind_Player[playerid][RewindSVehicle][ Rewind_Player[playerid][SyncedRewindFlags] ] , Rewind_Player[playerid][RSPosX][ Rewind_Player[playerid][SyncedRewindFlags] ] , Rewind_Player[playerid][RSPosY][ Rewind_Player[playerid][SyncedRewindFlags] ] , Rewind_Player[playerid][RSPosZ][ Rewind_Player[playerid][SyncedRewindFlags] ] );
+		SetVehicleZAngle(Rewind_Player[playerid][RewindSVehicle][ Rewind_Player[playerid][SyncedRewindFlags] ], Rewind_Player[playerid][RSPosAngle][ Rewind_Player[playerid][SyncedRewindFlags] ]);
+		SetVehicleVirtualWorld(Rewind_Player[playerid][RewindSVehicle][ Rewind_Player[playerid][SyncedRewindFlags] ], Rewind_Player[playerid][RSPVWorld][ Rewind_Player[playerid][SyncedRewindFlags] ]);
+		LinkVehicleToInterior(Rewind_Player[playerid][RewindSVehicle][ Rewind_Player[playerid][SyncedRewindFlags] ], Rewind_Player[playerid][RSPInterior][ Rewind_Player[playerid][SyncedRewindFlags] ]);
+	}
+
+
+	else if( (PlayerTempState == PLAYER_STATE_DRIVER && Rewind_Player[playerid][RSOldState][ Rewind_Player[playerid][SyncedRewindFlags] ]  == PLAYER_STATE_DRIVER) ||
+	(PlayerTempState == PLAYER_STATE_PASSENGER && Rewind_Player[playerid][RSOldState][ Rewind_Player[playerid][SyncedRewindFlags] ]  == PLAYER_STATE_PASSENGER) )
+	{
+		SetVehiclePos(Rewind_Player[playerid][RewindSVehicle][ Rewind_Player[playerid][SyncedRewindFlags] ] , Rewind_Player[playerid][RSPosX][ Rewind_Player[playerid][SyncedRewindFlags] ] , Rewind_Player[playerid][RSPosY][ Rewind_Player[playerid][SyncedRewindFlags] ] , Rewind_Player[playerid][RSPosZ][ Rewind_Player[playerid][SyncedRewindFlags] ] );
+		SetVehicleZAngle(Rewind_Player[playerid][RewindSVehicle][ Rewind_Player[playerid][SyncedRewindFlags] ], Rewind_Player[playerid][RSPosAngle][ Rewind_Player[playerid][SyncedRewindFlags] ]);
+		SetVehicleVirtualWorld(Rewind_Player[playerid][RewindSVehicle][ Rewind_Player[playerid][SyncedRewindFlags] ], Rewind_Player[playerid][RSPVWorld][ Rewind_Player[playerid][SyncedRewindFlags] ]);
+		LinkVehicleToInterior(Rewind_Player[playerid][RewindSVehicle][ Rewind_Player[playerid][SyncedRewindFlags] ], Rewind_Player[playerid][RSPInterior][ Rewind_Player[playerid][SyncedRewindFlags] ]);
+	}
+	else if( (PlayerTempState == PLAYER_STATE_DRIVER && Rewind_Player[playerid][RSOldState][ Rewind_Player[playerid][SyncedRewindFlags] ]  == PLAYER_STATE_ONFOOT) || 
+	(PlayerTempState == PLAYER_STATE_ONFOOT && Rewind_Player[playerid][RSOldState][ Rewind_Player[playerid][SyncedRewindFlags] ]  == PLAYER_STATE_ONFOOT) ||
+	(PlayerTempState == PLAYER_STATE_PASSENGER && Rewind_Player[playerid][RSOldState][ Rewind_Player[playerid][SyncedRewindFlags] ]  == PLAYER_STATE_ONFOOT) )
+	{
+		SetPlayerPos(playerid, Rewind_Player[playerid][RSPosX][ Rewind_Player[playerid][SyncedRewindFlags] ] , Rewind_Player[playerid][RSPosY][ Rewind_Player[playerid][SyncedRewindFlags] ] , Rewind_Player[playerid][RSPosZ][ Rewind_Player[playerid][SyncedRewindFlags] ] );
+		SetPlayerFacingAngle(playerid, Rewind_Player[playerid][RSPosAngle][ Rewind_Player[playerid][SyncedRewindFlags] ]); 
+	}
+
+	SetPlayerVirtualWorld(playerid, Rewind_Player[playerid][RSPVWorld][ Rewind_Player[playerid][SyncedRewindFlags] ]);
+	SetPlayerInterior(playerid, Rewind_Player[playerid][RSPInterior][ Rewind_Player[playerid][SyncedRewindFlags] ]);
+	return 1;
+}
+
 static SetPlayerPosByPhase(playerid)
 {
 
 	new PlayerTempState = GetPlayerState(playerid);
-	if(Rewind_Player[playerid][ROldState][ Rewind_Player[playerid][RewindPhases] ] == -1) Rewind_Player[playerid][ROldState][ Rewind_Player[playerid][RewindPhases] ] = PlayerTempState;
+	if(Rewind_Player[playerid][ROldState][ Rewind_Player[playerid][RewindPhases] ] == -1 || Rewind_Player[playerid][ROldState][ Rewind_Player[playerid][RewindPhases] ] == 0) Rewind_Player[playerid][ROldState][ Rewind_Player[playerid][RewindPhases] ] = PlayerTempState;
 
 	if( (PlayerTempState == PLAYER_STATE_ONFOOT && Rewind_Player[playerid][ROldState][ Rewind_Player[playerid][RewindPhases] ]  == PLAYER_STATE_DRIVER) ||
 	(PlayerTempState == PLAYER_STATE_PASSENGER && Rewind_Player[playerid][ROldState][ Rewind_Player[playerid][RewindPhases] ]  == PLAYER_STATE_DRIVER) )
@@ -646,7 +869,7 @@ static SetPlayerPosByPhase(playerid)
 		SetVehiclePos(Rewind_Player[playerid][RewindVehicle][ Rewind_Player[playerid][RewindPhases] ] , Rewind_Player[playerid][RPosX][ Rewind_Player[playerid][RewindPhases] ] , Rewind_Player[playerid][RPosY][ Rewind_Player[playerid][RewindPhases] ] , Rewind_Player[playerid][RPosZ][ Rewind_Player[playerid][RewindPhases] ] );
 		SetVehicleZAngle(Rewind_Player[playerid][RewindVehicle][ Rewind_Player[playerid][RewindPhases] ], Rewind_Player[playerid][RPosAngle][ Rewind_Player[playerid][RewindPhases] ]);
 		SetVehicleVirtualWorld(Rewind_Player[playerid][RewindVehicle][ Rewind_Player[playerid][RewindPhases] ], Rewind_Player[playerid][RPVWorld][ Rewind_Player[playerid][RewindPhases] ]);
-		LinkVehicleToInterior(Rewind_Player[playerid][RewindVehicle][ Rewind_Player[playerid][RewindPhases] ], Rewind_Player[playerid][RPVWorld][ Rewind_Player[playerid][RewindPhases] ]);
+		LinkVehicleToInterior(Rewind_Player[playerid][RewindVehicle][ Rewind_Player[playerid][RewindPhases] ], Rewind_Player[playerid][RPInterior][ Rewind_Player[playerid][RewindPhases] ]);
 	}
 	else if( (PlayerTempState == PLAYER_STATE_ONFOOT && Rewind_Player[playerid][ROldState][ Rewind_Player[playerid][RewindPhases] ]  == PLAYER_STATE_PASSENGER) ||
 	(PlayerTempState == PLAYER_STATE_DRIVER && Rewind_Player[playerid][ROldState][ Rewind_Player[playerid][RewindPhases] ]  == PLAYER_STATE_PASSENGER) )
@@ -655,7 +878,7 @@ static SetPlayerPosByPhase(playerid)
 		SetVehiclePos(Rewind_Player[playerid][RewindVehicle][ Rewind_Player[playerid][RewindPhases] ] , Rewind_Player[playerid][RPosX][ Rewind_Player[playerid][RewindPhases] ] , Rewind_Player[playerid][RPosY][ Rewind_Player[playerid][RewindPhases] ] , Rewind_Player[playerid][RPosZ][ Rewind_Player[playerid][RewindPhases] ] );
 		SetVehicleZAngle(Rewind_Player[playerid][RewindVehicle][ Rewind_Player[playerid][RewindPhases] ], Rewind_Player[playerid][RPosAngle][ Rewind_Player[playerid][RewindPhases] ]);
 		SetVehicleVirtualWorld(Rewind_Player[playerid][RewindVehicle][ Rewind_Player[playerid][RewindPhases] ], Rewind_Player[playerid][RPVWorld][ Rewind_Player[playerid][RewindPhases] ]);
-		LinkVehicleToInterior(Rewind_Player[playerid][RewindVehicle][ Rewind_Player[playerid][RewindPhases] ], Rewind_Player[playerid][RPVWorld][ Rewind_Player[playerid][RewindPhases] ]);
+		LinkVehicleToInterior(Rewind_Player[playerid][RewindVehicle][ Rewind_Player[playerid][RewindPhases] ], Rewind_Player[playerid][RPInterior][ Rewind_Player[playerid][RewindPhases] ]);
 	}
 
 
@@ -665,7 +888,7 @@ static SetPlayerPosByPhase(playerid)
 		SetVehiclePos(Rewind_Player[playerid][RewindVehicle][ Rewind_Player[playerid][RewindPhases] ] , Rewind_Player[playerid][RPosX][ Rewind_Player[playerid][RewindPhases] ] , Rewind_Player[playerid][RPosY][ Rewind_Player[playerid][RewindPhases] ] , Rewind_Player[playerid][RPosZ][ Rewind_Player[playerid][RewindPhases] ] );
 		SetVehicleZAngle(Rewind_Player[playerid][RewindVehicle][ Rewind_Player[playerid][RewindPhases] ], Rewind_Player[playerid][RPosAngle][ Rewind_Player[playerid][RewindPhases] ]);
 		SetVehicleVirtualWorld(Rewind_Player[playerid][RewindVehicle][ Rewind_Player[playerid][RewindPhases] ], Rewind_Player[playerid][RPVWorld][ Rewind_Player[playerid][RewindPhases] ]);
-		LinkVehicleToInterior(Rewind_Player[playerid][RewindVehicle][ Rewind_Player[playerid][RewindPhases] ], Rewind_Player[playerid][RPVWorld][ Rewind_Player[playerid][RewindPhases] ]);
+		LinkVehicleToInterior(Rewind_Player[playerid][RewindVehicle][ Rewind_Player[playerid][RewindPhases] ], Rewind_Player[playerid][RPInterior][ Rewind_Player[playerid][RewindPhases] ]);
 	}
 	else if( (PlayerTempState == PLAYER_STATE_DRIVER && Rewind_Player[playerid][ROldState][ Rewind_Player[playerid][RewindPhases] ]  == PLAYER_STATE_ONFOOT) || 
 	(PlayerTempState == PLAYER_STATE_ONFOOT && Rewind_Player[playerid][ROldState][ Rewind_Player[playerid][RewindPhases] ]  == PLAYER_STATE_ONFOOT) ||
@@ -696,6 +919,10 @@ static FinishRewind(playerid)
 
 static ResetTimeMachine(playerid)
 {
+	Rewind_Player[playerid][PRewindFlash] = false;
+	Rewind_Player[playerid][PRewindAuto] = false;
+	Rewind_Player[playerid][PRewindCamera] = false;
+	Rewind_Player[playerid][PrewindWorld] = false;
 	Rewind_Player[playerid][RewindHP] = 0.0;
 	Rewind_Player[playerid][RewindArmour] = 0.0;
 	Rewind_Player[playerid][RewindPhases] = 0;
@@ -754,8 +981,7 @@ public OnPlayerFinishRewindEx(playerid)
 
 public StartSyncingDots(playerid)
 {
-	Update3DTextLabelText(Rewind_Player[playerid][RewindLabel], GetPlayerColor(playerid) >>> 8, GetBarDots(playerid));
-	return 1;
+	return Update3DTextLabelText(Rewind_Player[playerid][RewindLabel], GetPlayerColor(playerid) >>> 8, GetBarDots(playerid));
 }
 
 public SyncTimeMachine()
@@ -776,16 +1002,9 @@ public SyncTimeMachine()
 	return 1;
 }
 
-public HideThisEffect(playerid, EffectType)
+public HideThisEffect(playerid)
 {
-	switch(EffectType)
-	{
-		case 0:
-		{
-			TextDrawHideForPlayer(playerid, Rewind_TD[13]);
-		}
-	}
-	return 1;
+	return TextDrawHideForPlayer(playerid, Rewind_TD[13]);
 }
 
 public SetPlayersCamBehind(playerid)
@@ -795,8 +1014,11 @@ public SetPlayersCamBehind(playerid)
 
 public RerollTape(playerid)
 {
-	TextDrawShowForPlayer(playerid, Rewind_TD[13]);
-	SetTimerEx("HideThisEffect", 100, false, "ii", playerid, 0);
+	if(!Rewind_Player[playerid][PRewindFlash] && !Rewind_World[RewindFlash])
+	{
+		TextDrawShowForPlayer(playerid, Rewind_TD[13]);
+		SetTimerEx("HideThisEffect", 100, false, "i", playerid);
+	}
 
 	switch(Rewind_Player[playerid][RewindPhases])
 	{
@@ -831,7 +1053,6 @@ public RerollTape(playerid)
 		{
 			SetPlayerPosByPhase(playerid);
 			FinishRewind(playerid);
-			Rewind_Player[playerid][RewindPhases] = REWIND_MAXIMUM_PHASES;
 			SetPlayerHealth(playerid, Rewind_Player[playerid][RewindHP]);
 			SetPlayerArmour(playerid, Rewind_Player[playerid][RewindArmour]);
 			return 1;
@@ -872,18 +1093,21 @@ public RerollTape(playerid)
 				}
 			}
 
-			if(Rewind_Player[playerid][RewindPhases] == REWIND_MAXIMUM_PHASES)
+			if(!Rewind_Player[playerid][PRewindCamera] && !Rewind_World[RewindCamera])
 			{
-				InterpolateCameraPos(playerid, Rewind_Player[playerid][RPosX][ Rewind_Player[playerid][RewindPhases] ] , Rewind_Player[playerid][RPosY][ Rewind_Player[playerid][RewindPhases] ] , Rewind_Player[playerid][RPosZ][ Rewind_Player[playerid][RewindPhases] ], Rewind_Player[playerid][RPosX][ Rewind_Player[playerid][RewindPhases] ] , Rewind_Player[playerid][RPosY][ Rewind_Player[playerid][RewindPhases] ] , Rewind_Player[playerid][RPosZ][ Rewind_Player[playerid][RewindPhases] ]+10, 450);
-				InterpolateCameraLookAt(playerid, Rewind_Player[playerid][RPosX][ Rewind_Player[playerid][RewindPhases] ] , Rewind_Player[playerid][RPosY][ Rewind_Player[playerid][RewindPhases] ] , Rewind_Player[playerid][RPosZ][ Rewind_Player[playerid][RewindPhases] ], Rewind_Player[playerid][RPosX][ Rewind_Player[playerid][RewindPhases] ] + 1, Rewind_Player[playerid][RPosY][ Rewind_Player[playerid][RewindPhases] ] - 1, Rewind_Player[playerid][RPosZ][ Rewind_Player[playerid][RewindPhases] ] + 1, 450);
-			}
-			else
-			{
-				InterpolateCameraPos(playerid, Rewind_Player[playerid][RPosX][ Rewind_Player[playerid][RewindPhases] +1 ] , Rewind_Player[playerid][RPosY][ Rewind_Player[playerid][RewindPhases] +1 ] , Rewind_Player[playerid][RPosZ][ Rewind_Player[playerid][RewindPhases] +1 ], Rewind_Player[playerid][RPosX][ Rewind_Player[playerid][RewindPhases] ] , Rewind_Player[playerid][RPosY][ Rewind_Player[playerid][RewindPhases] ] , Rewind_Player[playerid][RPosZ][ Rewind_Player[playerid][RewindPhases] ]+10, 450);
-				InterpolateCameraLookAt(playerid, Rewind_Player[playerid][RPosX][ Rewind_Player[playerid][RewindPhases] +1 ] , Rewind_Player[playerid][RPosY][ Rewind_Player[playerid][RewindPhases] +1 ] , Rewind_Player[playerid][RPosZ][ Rewind_Player[playerid][RewindPhases] +1 ], Rewind_Player[playerid][RPosX][ Rewind_Player[playerid][RewindPhases] ] + 1, Rewind_Player[playerid][RPosY][ Rewind_Player[playerid][RewindPhases] ] - 1, Rewind_Player[playerid][RPosZ][ Rewind_Player[playerid][RewindPhases] ] + 1, 450);
+				if(Rewind_Player[playerid][RewindPhases] == REWIND_MAXIMUM_PHASES)
+				{
+					InterpolateCameraPos(playerid, Rewind_Player[playerid][RPosX][ Rewind_Player[playerid][RewindPhases] ] , Rewind_Player[playerid][RPosY][ Rewind_Player[playerid][RewindPhases] ] , Rewind_Player[playerid][RPosZ][ Rewind_Player[playerid][RewindPhases] ], Rewind_Player[playerid][RPosX][ Rewind_Player[playerid][RewindPhases] ] , Rewind_Player[playerid][RPosY][ Rewind_Player[playerid][RewindPhases] ] , Rewind_Player[playerid][RPosZ][ Rewind_Player[playerid][RewindPhases] ]+10, 450);
+					InterpolateCameraLookAt(playerid, Rewind_Player[playerid][RPosX][ Rewind_Player[playerid][RewindPhases] ] , Rewind_Player[playerid][RPosY][ Rewind_Player[playerid][RewindPhases] ] , Rewind_Player[playerid][RPosZ][ Rewind_Player[playerid][RewindPhases] ], Rewind_Player[playerid][RPosX][ Rewind_Player[playerid][RewindPhases] ] + 1, Rewind_Player[playerid][RPosY][ Rewind_Player[playerid][RewindPhases] ] - 1, Rewind_Player[playerid][RPosZ][ Rewind_Player[playerid][RewindPhases] ] + 1, 450);
+				}
+				else
+				{
+					InterpolateCameraPos(playerid, Rewind_Player[playerid][RPosX][ Rewind_Player[playerid][RewindPhases] +1 ] , Rewind_Player[playerid][RPosY][ Rewind_Player[playerid][RewindPhases] +1 ] , Rewind_Player[playerid][RPosZ][ Rewind_Player[playerid][RewindPhases] +1 ], Rewind_Player[playerid][RPosX][ Rewind_Player[playerid][RewindPhases] ] , Rewind_Player[playerid][RPosY][ Rewind_Player[playerid][RewindPhases] ] , Rewind_Player[playerid][RPosZ][ Rewind_Player[playerid][RewindPhases] ]+10, 450);
+					InterpolateCameraLookAt(playerid, Rewind_Player[playerid][RPosX][ Rewind_Player[playerid][RewindPhases] +1 ] , Rewind_Player[playerid][RPosY][ Rewind_Player[playerid][RewindPhases] +1 ] , Rewind_Player[playerid][RPosZ][ Rewind_Player[playerid][RewindPhases] +1 ], Rewind_Player[playerid][RPosX][ Rewind_Player[playerid][RewindPhases] ] + 1, Rewind_Player[playerid][RPosY][ Rewind_Player[playerid][RewindPhases] ] - 1, Rewind_Player[playerid][RPosZ][ Rewind_Player[playerid][RewindPhases] ] + 1, 450);
+				}
 			}
 
-			SetTimerEx("SetPlayersCamBehind", 700, false, "i", playerid);
+			if(!Rewind_Player[playerid][PRewindCamera] && !Rewind_World[RewindCamera]) SetTimerEx("SetPlayersCamBehind", 700, false, "i", playerid);
 			SetPlayerPosByPhase(playerid);
 			Rewind_Player[playerid][RewindPhases]--;
 			SetTimerEx("RerollTape", 2000, false, "i", playerid);
@@ -954,6 +1178,8 @@ public SyncMachinePower(playerid)
 
 public StartSavingRewindData(playerid)
 {
+	if(Rewind_Player[playerid][PRewindAuto] || Rewind_World[RewindAuto]) return 0;
+
 	new PlayerVehicleID = GetPlayerVehicleID(playerid),
 		PlayerCurrentState = GetPlayerState(playerid);
 
@@ -976,6 +1202,7 @@ public StartSavingRewindData(playerid)
 
 	Rewind_Player[playerid][RPInterior][ Rewind_Player[playerid][RewindPhases] ] = GetPlayerInterior(playerid);
 	Rewind_Player[playerid][RPVWorld][ Rewind_Player[playerid][RewindPhases] ]   = GetPlayerVirtualWorld(playerid);
+	Rewind_Player[playerid][ROldState][ Rewind_Player[playerid][RewindPhases] ] = PlayerCurrentState;
 
 	switch(PlayerCurrentState)
 	{
@@ -1005,7 +1232,103 @@ public StartSavingRewindData(playerid)
 	return 1;
 }
 
-//Hookings:
+public SyncedRewindProcess(playerid)
+{
+	if(!RewindOldEqualsNew(playerid, Rewind_Player[playerid][SyncedRewindFlags]-1))
+	{
+		Rewind_Player[playerid][SyncedRewindFlags]++;
+		SaveRewindFlag(playerid);
+	}
+
+	if(Rewind_Player[playerid][SyncedRewindFlags] == SYNCEED_REWIND_BUFFER)
+	{
+		KillTimer(Rewind_Player[playerid][SyncedRewindTimer]);
+		RewindMakePlayerChoose(playerid);
+	}
+	return 1;
+}
+
+public StartRerollingTapeSynced(playerid, RewindFlag)
+{
+	if(!Rewind_Player[playerid][PRewindFlash] && !Rewind_World[RewindFlash])
+	{
+		TextDrawShowForPlayer(playerid, Rewind_TD[13]);
+		SetTimerEx("HideThisEffect", 70, false, "i", playerid);
+	}
+
+	switch(Rewind_Player[playerid][SyncedRewindFlags])
+	{
+		case 0:
+		{
+			SetPlayeRSPosByPhaseSynced(playerid);
+			SyncedRewindResetTools(playerid);
+
+			#if defined OnPlayerFinishFastRewind
+				OnPlayerFinishFastRewind(playerid);
+			#endif
+
+			return 1;
+		}
+
+		case 1..SYNCEED_REWIND_BUFFER:
+		{
+			if(Rewind_Player[playerid][SyncedRewindFlags] == SYNCEED_REWIND_BUFFER)
+			{
+				if(!Rewind_Player[playerid][PRewindCamera] && !Rewind_World[RewindCamera]) 
+				{
+					InterpolateCameraPos(playerid, Rewind_Player[playerid][RSPosX][ Rewind_Player[playerid][SyncedRewindFlags] ] , 
+					Rewind_Player[playerid][RSPosY][ Rewind_Player[playerid][SyncedRewindFlags] ] , 
+					Rewind_Player[playerid][RSPosZ][ Rewind_Player[playerid][SyncedRewindFlags] ], 
+					Rewind_Player[playerid][RSPosX][ Rewind_Player[playerid][SyncedRewindFlags] ] , 
+					Rewind_Player[playerid][RSPosY][ Rewind_Player[playerid][SyncedRewindFlags] ] , 
+					Rewind_Player[playerid][RSPosZ][ Rewind_Player[playerid][SyncedRewindFlags] ]+10, 200);
+
+					InterpolateCameraLookAt(playerid, Rewind_Player[playerid][RSPosX][ Rewind_Player[playerid][SyncedRewindFlags] ] , 
+					Rewind_Player[playerid][RSPosY][ Rewind_Player[playerid][SyncedRewindFlags] ] , 
+					Rewind_Player[playerid][RSPosZ][ Rewind_Player[playerid][SyncedRewindFlags] ], 
+					Rewind_Player[playerid][RSPosX][ Rewind_Player[playerid][SyncedRewindFlags] ] + 1, 
+					Rewind_Player[playerid][RSPosY][ Rewind_Player[playerid][SyncedRewindFlags] ] - 1, 
+					Rewind_Player[playerid][RSPosZ][ Rewind_Player[playerid][SyncedRewindFlags] ] + 1, 200);
+				}
+			}
+			else
+			{
+				if(!Rewind_Player[playerid][PRewindCamera] && !Rewind_World[RewindCamera])
+				{
+					InterpolateCameraPos(playerid, Rewind_Player[playerid][RSPosX][ Rewind_Player[playerid][SyncedRewindFlags] +1 ] , 
+					Rewind_Player[playerid][RSPosY][ Rewind_Player[playerid][SyncedRewindFlags] +1 ] , 
+					Rewind_Player[playerid][RSPosZ][ Rewind_Player[playerid][SyncedRewindFlags] +1 ], 
+					Rewind_Player[playerid][RSPosX][ Rewind_Player[playerid][SyncedRewindFlags] ] , 
+					Rewind_Player[playerid][RSPosY][ Rewind_Player[playerid][SyncedRewindFlags] ] , 
+					Rewind_Player[playerid][RSPosZ][ Rewind_Player[playerid][SyncedRewindFlags] ]+10, 200);
+
+					InterpolateCameraLookAt(playerid, Rewind_Player[playerid][RSPosX][ Rewind_Player[playerid][SyncedRewindFlags] +1 ] , 
+					Rewind_Player[playerid][RSPosY][ Rewind_Player[playerid][SyncedRewindFlags] +1 ] , 
+					Rewind_Player[playerid][RSPosZ][ Rewind_Player[playerid][SyncedRewindFlags] +1 ], 
+					Rewind_Player[playerid][RSPosX][ Rewind_Player[playerid][SyncedRewindFlags] ] + 1, 
+					Rewind_Player[playerid][RSPosY][ Rewind_Player[playerid][SyncedRewindFlags] ] - 1, 
+					Rewind_Player[playerid][RSPosZ][ Rewind_Player[playerid][SyncedRewindFlags] ] + 1, 200);
+				}
+			}
+
+			if(!Rewind_Player[playerid][PRewindCamera] && !Rewind_World[RewindCamera]) SetTimerEx("SetPlayersCamBehind", 250, false, "i", playerid);
+			SetPlayeRSPosByPhaseSynced(playerid);
+			Rewind_Player[playerid][SyncedRewindFlags]--;
+			return 1;
+		}
+	}
+	return 1;
+}
+
+//Hookings: 
+#if defined _ALS_OnDialogResponse
+  #undef OnDialogResponse
+#else
+	#define _ALS_OnDialogResponse
+#endif
+
+#define OnDialogResponse RTC_OnDialogResponse
+
 #if defined _ALS_OnPlayerDisconnect
   #undef OnPlayerDisconnect
 #else
@@ -1021,14 +1344,6 @@ public StartSavingRewindData(playerid)
 #endif
 
 #define OnPlayerConnect RTC_OnPlayerConnect
-
-#if defined _ALS_OnPlayerStateChange
-  #undef OnPlayerStateChange
-#else
-	#define _ALS_OnPlayerStateChange
-#endif
-
-#define OnPlayerStateChange RTC_OnPlayerStateChange
 
 #if defined FILTERSCRIPT
 
