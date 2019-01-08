@@ -25,6 +25,9 @@ Callbacks:
 public OnPlayerRewindForPlayer(playerid, forplayerid);
 public OnPlayerStartRewind(playerid);
 public OnPlayerFinishRewind(playerid);
+
+public OnPlayerFastRewind(playerid);
+public OnPlayerFinishFastRewind(playerid);
 ```
 
 Functions:
@@ -33,14 +36,30 @@ ShowTimeMachineSynced(playerid);
 HideTimeMachineSynced(playerid);
 
 StartRewinding(playerid);
+StartRecordingRewindSynced(playerid);
 
 bool:IsPlayerInvolvedInRewind(playerid);
 bool:IsPlayerRewinding(playerid);
+bool:IsPlayerFastRewinding(playerid);
+
+ToggleRewindFlash(bool:toggle);
+ToggleRewindFlashForPlayer(playerid, bool:toggle);
+
+ToggleCameraMovements(bool:toggle);
+ToggleCameraMovementsForPlayer(playerid, bool:toggle);
+
+ToggleRewindAuto(bool:toggle);
+ToggleRewindAutoForPlayer(playerid, bool:toggle);
+
+ToggleWorldRewind(bool:toggle);
+ToggleWorldRewindForPlayer(playerid, bool:toggle);
+
 ```
 
 More add-ons:
 ```C
-#define REWIND_MAXIMUM_PHASES 5 //Can be changed just put the line with your number before the include.
+#define REWIND_MAXIMUM_PHASES [NUMBER] //Can be changed just put the line with your number before the include.
+#define REWIND_CHOOSING_DIALOG [NUMBER] //Dialog ID for the fast rewind you can change for whatever reason
 ```
 
 ## Testing
