@@ -620,7 +620,7 @@ stock ToggleRewindAutoForPlayer(playerid, bool:toggle)
 
 stock ToggleWorldRewind(bool:toggle)
 {
-	return Rewind_World[RewindWorld] = toggle;
+	return Rewind_World[WorldRewind] = toggle;
 }
 
 stock ToggleWorldRewindForPlayer(playerid, bool:toggle)
@@ -650,7 +650,7 @@ stock StartRewinding(playerid)
 	ShowPlayerRewindScene(playerid);
 	PlayAudioStreamForPlayer(playerid, "https://s0.vocaroo.com/media/download_temp/Vocaroo_s02Q30FyGOWp.mp3");
 	TogglePlayerControllable(playerid, 0);
-	if(!Rewind_World[RewindWorld] && !Rewind_Player[playerid][PrewindWorld]) RewindWorld(playerid);
+	if(!Rewind_World[WorldRewind] && !Rewind_Player[playerid][PrewindWorld]) RewindWorld(playerid);
 	RerollTape(playerid);
 	return OnPlayerStartRewindEx(playerid);	
 }
