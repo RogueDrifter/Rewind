@@ -18,7 +18,10 @@
 #define MAX_REWIND_TDRAW 12
 #define REWIND_PLAYERS_HARMONY 2
 #define SYNCEED_REWIND_BUFFER 85
-#define REWIND_CHOOSING_DIALOG 32766
+
+#if !defined REWIND_CHOOSING_DIALOG
+	#define REWIND_CHOOSING_DIALOG 32766
+#endif
 
 #if !defined REWIND_MAXIMUM_PHASES
 	#define REWIND_MAXIMUM_PHASES 5
@@ -732,7 +735,7 @@ static RewindOldEqualsNew(playerid, CurrentFlagCount)
 	{
 		return 1;
 	}
-	
+
 	return 0;
 }
 
