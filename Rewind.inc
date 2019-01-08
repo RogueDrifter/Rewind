@@ -577,6 +577,7 @@ static stock ShowPlayerRewindScene(playerid)
 			}
 		}
 	}
+
 	return 1;
 }
 
@@ -585,6 +586,7 @@ stock bool:IsPlayerRewinding(playerid)
 
 stock bool:IsPlayerInvolvedInRewind(playerid) 
 	return Rewind_Player[playerid][BRewind];
+	
 stock bool:IsPlayerFastRewinding(playerid)
 	return Rewind_Player[playerid][SyncedRewindOn];
 
@@ -640,7 +642,7 @@ stock StartRecordingRewindSynced(playerid)
 
 stock StartRewinding(playerid)
 {
-	if(Rewind_Player[playerid][PRewind] || Rewind_Player[playerid][BRewind] || Rewind_Player[playerid][SyncedRewindOn]) return 0;
+	if(Rewind_Player[playerid][PRewind] || Rewind_Player[playerid][BRewind] || Rewind_Player[playerid][SyncedRewindOn] || Rewind_Player[playerid][SyncedRewindDouble]) return 0;
 	if(Rewind_Player[playerid][RewindPhases] < 1) return 0;
 	Rewind_Player[playerid][PRewind] = true;
 	if(Rewind_Player[playerid][ResyncOn]) HideTimeMachineSynced(playerid);
