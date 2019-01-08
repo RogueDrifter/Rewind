@@ -60,6 +60,8 @@ More add-ons:
 ```C
 #define REWIND_MAXIMUM_PHASES [NUMBER] //Can be changed just put the line with your number before the include.
 #define REWIND_CHOOSING_DIALOG [NUMBER] //Dialog ID for the fast rewind you can change for whatever reason
+#define REWiND_FULLY_SYNCED_TIMER [NUMBER] //This is in MS you can change it depending on how fast you want the timers to record/play
+#define SYNCEED_REWIND_BUFFER [NUMBER] //This is the capacity of the fast rewind cells, don't change this if you don't know what you're doing
 ```
 
 ## Testing
