@@ -17,7 +17,14 @@
 #define PLAYER_SEAT_FRONT_PASSENGER 1
 #define MAX_REWIND_TDRAW 12
 #define REWIND_PLAYERS_HARMONY 2
-#define SYNCEED_REWIND_BUFFER 85
+
+#if !defined SYNCEED_REWIND_BUFFER
+	#define SYNCEED_REWIND_BUFFER 85
+#endif
+
+#if !defined REWiND_FULLY_SYNCED_TIMER
+	#define REWiND_FULLY_SYNCED_TIMER 100
+#endif
 
 #if !defined REWIND_CHOOSING_DIALOG
 	#define REWIND_CHOOSING_DIALOG 32766
@@ -502,6 +509,7 @@ static stock RewindMakePlayerChoose(playerid)
 	TogglePlayerControllable(playerid, 0);
 	PlayAudioStreamForPlayer(playerid, "https://vocaroo.com/media_command.php?media=s0iFx9S5qoFf&command=download_mp3");
 	ShowPlayerDialog(playerid, REWIND_CHOOSING_DIALOG, DIALOG_STYLE_MSGBOX, "{FFFFFF}Time machine", "{FFFFFF}Play this rewind?", "{00FF00}Yes", "{FF0000}No");
+
 	return 1;
 }
 
@@ -514,12 +522,13 @@ static stock SyncedRewindResetTools(playerid)
 	Rewind_Player[playerid][SyncedRewindFlags] = 0;
 	KillTimer(Rewind_Player[playerid][SyncedRewindTimer]);
 	KillTimer(Rewind_Player[playerid][SyncedRerollTimer]);
+
 	return 1;
 }
 
 static stock RewindPlayerFullySynced(playerid)
 {
-	return Rewind_Player[playerid][SyncedRerollTimer] = SetTimerEx("StartRerollingTapeSynced", 100, true, "i", playerid, Rewind_Player[playerid][SyncedRewindFlags]); 
+	return Rewind_Player[playerid][SyncedRerollTimer] = SetTimerEx("StartRerollingTapeSynced", REWiND_FULLY_SYNCED_TIMER, true, "i", playerid, Rewind_Player[playerid][SyncedRewindFlags]); 
 }
 
 static stock ShowPlayerRewindScene(playerid)
@@ -636,7 +645,8 @@ stock StartRecordingRewindSynced(playerid)
 	Rewind_Player[playerid][SyncedRewindDouble] = true;
 
 	SaveRewindFlag(playerid);
-	Rewind_Player[playerid][SyncedRewindTimer] = SetTimerEx("SyncedRewindProcess", 100, true, "i", playerid);
+	Rewind_Player[playerid][SyncedRewindTimer] = SetTimerEx("SyncedRewindProcess", REWiND_FULLY_SYNCED_TIMER, true, "i", playerid);
+	
 	return 1;
 }
 
