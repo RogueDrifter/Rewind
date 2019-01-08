@@ -45,8 +45,8 @@ bool:IsPlayerFastRewinding(playerid);
 ToggleRewindFlash(bool:toggle);
 ToggleRewindFlashForPlayer(playerid, bool:toggle);
 
-ToggleCameraMovements(bool:toggle);
-ToggleCameraMovementsForPlayer(playerid, bool:toggle);
+ToggleRewindCameraMoves(bool:toggle);
+ToggleRewindCameraMovesForPlayer(playerid, bool:toggle);
 
 ToggleRewindAuto(bool:toggle);
 ToggleRewindAutoForPlayer(playerid, bool:toggle);
