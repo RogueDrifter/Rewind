@@ -600,12 +600,12 @@ stock ToggleRewindFlashForPlayer(playerid, bool:toggle)
 	return Rewind_Player[playerid][PRewindFlash] = toggle;
 }
 
-stock ToggleRewindCameraMoves(bool:toggle)
+stock ToggleRewindCameraMove(bool:toggle)
 {
 	return Rewind_World[RewindCamera] = toggle;
 }
 
-stock ToggleRewindCameraMovesForPlayer(playerid, bool:toggle)
+stock ToggleRewindCameraMoveForPlayer(playerid, bool:toggle)
 {
 	return Rewind_Player[playerid][PRewindCamera] = toggle;
 }
