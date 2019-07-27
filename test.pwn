@@ -36,7 +36,7 @@ public OnPlayerConnect(playerid)
 	return 1;
 }
 
-public OnPlayerDeath(playerid, killerid, reason)
+public OnPlayerDisconnect(playerid, reason)
 {
 	HideTimeMachineSynced(playerid);
 	return 1;
